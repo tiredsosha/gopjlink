@@ -2,6 +2,7 @@ package pjlink
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -40,4 +41,45 @@ func NewProjector(addr string, opts ...Option) *Projector {
 			Logger: options.log.Sugar(),
 		},
 	}
+}
+
+func (p *Projector) sendCommand(ctx context.Context, cmd command) (command, error) {
+	var resp command
+
+	req, err := cmd.MarshalBinary()
+	if err != nil {
+		return resp, fmt.Errorf("unable to marshal command: %w", err)
+	}
+
+	err = p.pool.Do(ctx, func(conn connpool.Conn) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadline = time.Now().Add(10 * time.Second)
+		}
+
+		if err := conn.SetDeadline(deadline); err != nil {
+			return fmt.Errorf("unable to set connection deadline: %w", err)
+		}
+
+		n, err := conn.Write(req)
+		switch {
+		case err != nil:
+			return fmt.Errorf("unable to write to connection: %w", err)
+		case n != len(req):
+			return fmt.Errorf("unable to write to connection: wrote %v/%v bytes", n, len(req))
+		}
+
+		data, err := conn.ReadUntil(_terminator, deadline)
+		if err != nil {
+			return fmt.Errorf("unable to read from connection: %w", err)
+		}
+
+		if err := resp.UnmarshalBinary(data); err != nil {
+			return fmt.Errorf("unable to unmarshal response: %w", err)
+		}
+
+		return nil
+	})
+
+	return resp, err
 }

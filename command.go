@@ -1,6 +1,7 @@
 package pjlink
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 )
@@ -73,9 +74,9 @@ func (c *command) UnmarshalBinary(data []byte) error {
 	case data[0] != _commandHeader:
 		return fmt.Errorf("invalid header %#x", data[0])
 	case data[len(data)-1] != _terminator:
-		return fmt.Errorf("invalid terminator %#x", data[0])
+		return fmt.Errorf("invalid terminator %#x", data[len(data)-1])
 	case data[6] != _separatorCommand && data[6] != _separatorResponse:
-		return fmt.Errorf("invalid separator %#x", data[0])
+		return fmt.Errorf("invalid separator %#x", data[6])
 	}
 
 	c.Class = data[1]
@@ -88,4 +89,21 @@ func (c *command) UnmarshalBinary(data []byte) error {
 	}
 
 	return nil
+}
+
+func (c command) Error() error {
+	switch {
+	case !bytes.HasPrefix(bytes.ToUpper(c.Parameter), []byte{'E', 'R', 'R'}):
+		return nil
+	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '1'}):
+		return errors.New("undefined command")
+	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '2'}):
+		return errors.New("out of parameter")
+	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '3'}):
+		return errors.New("unavailable time")
+	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '4'}):
+		return errors.New("projector/display failure")
+	}
+
+	return fmt.Errorf("unknown error: %#x", c.Parameter)
 }
