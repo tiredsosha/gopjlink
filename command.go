@@ -6,25 +6,69 @@ import (
 	"fmt"
 )
 
-type command struct {
-	Class     byte
-	Body      [4]byte
-	Response  bool
-	Parameter []byte
+type line []byte
+
+func newCommand(class byte, body [4]byte, param []byte) (line, error) {
+	// can parameter be len(0)?
+	if len(param) > 128 {
+		return nil, fmt.Errorf("parameter must be less than 128 bytes")
+	}
+
+	l := make(line, _minCommandBytes+len(param))
+	l[0] = '%'
+	l[1] = class
+
+	l[2] = body[0]
+	l[3] = body[1]
+	l[4] = body[2]
+	l[5] = body[3]
+
+	l[6] = ' '
+
+	copy(l[7:], param)
+	l[len(l)-1] = '\r'
+	return l, nil
+}
+
+func (c line) Header() byte {
+	if len(c) == 0 {
+		return 0x00
+	}
+
+	return c[0]
+}
+
+func (c line) Body() [4]byte {
+	if len(c) < 6 {
+		return [4]byte{}
+	}
+
+	return [4]byte{c[2], c[3], c[4], c[5]}
+}
+
+func (c line) Parameter() []byte {
+	if len(c) < _minCommandBytes || len(c) > _minCommandBytes+_maxParameterBytes {
+		return nil
+	}
+
+	return c[7 : len(c)-1]
+}
+
+func (c line) IsAuth() bool {
+	lower := bytes.ToLower(c)
+	return bytes.HasPrefix(lower, []byte{'p', 'j', 'l', 'i', 'n', 'k'})
 }
 
 const (
-	_minCommandBytes = 1 + 1 + 4 + 1 + 1
-	_terminator      = '\r'
-	_commandHeader   = '%'
+	_minCommandBytes   = 1 + 1 + 4 + 1 + 1
+	_maxParameterBytes = 128
 
 	// separators
-	_separatorCommand  = ' '
 	_separatorResponse = '='
 )
 
 var (
-	// bodies
+	_bodyAuth        = [4]byte{'L', 'I', 'N', 'K'}
 	_bodyPower       = [4]byte{'P', 'O', 'W', 'R'}
 	_bodyInput       = [4]byte{'I', 'N', 'P', 'T'}
 	_bodyMute        = [4]byte{'A', 'V', 'M', 'T'}
@@ -38,33 +82,7 @@ var (
 	_bodyClass       = [4]byte{'C', 'L', 'S', 'S'}
 )
 
-func (c command) MarshalBinary() ([]byte, error) {
-	// can parameter be len(0)?
-	if len(c.Parameter) > 128 {
-		return nil, fmt.Errorf("parameter must be less than 128 bytes")
-	}
-
-	data := make([]byte, _minCommandBytes+len(c.Parameter))
-
-	data[0] = _commandHeader
-	data[1] = c.Class
-
-	data[2] = c.Body[0]
-	data[3] = c.Body[1]
-	data[4] = c.Body[2]
-	data[5] = c.Body[3]
-
-	data[6] = _separatorCommand
-	if c.Response {
-		data[6] = _separatorResponse
-	}
-
-	copy(data[7:], c.Parameter)
-	data[len(data)-1] = _terminator
-
-	return data, nil
-}
-
+/*
 func (c *command) UnmarshalBinary(data []byte) error {
 	if len(data) < _minCommandBytes {
 		return errors.New("data is too short")
@@ -90,20 +108,25 @@ func (c *command) UnmarshalBinary(data []byte) error {
 
 	return nil
 }
+*/
 
-func (c command) Error() error {
+func (l line) Error() error {
+	param := l.Parameter()
+
 	switch {
-	case !bytes.HasPrefix(bytes.ToUpper(c.Parameter), []byte{'E', 'R', 'R'}):
+	case !bytes.HasPrefix(bytes.ToUpper(param), []byte{'E', 'R', 'R'}):
 		return nil
-	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '1'}):
+	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '1'}):
 		return errors.New("undefined command")
-	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '2'}):
+	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '2'}):
 		return errors.New("out of parameter")
-	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '3'}):
+	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '3'}):
 		return errors.New("unavailable time")
-	case bytes.EqualFold(c.Parameter, []byte{'E', 'R', 'R', '4'}):
+	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '4'}):
 		return errors.New("projector/display failure")
+	case bytes.EqualFold(param, []byte{'E', 'R', 'R', 'A'}):
+		return errors.New("invalid password")
 	}
 
-	return fmt.Errorf("unknown error: %#x", c.Parameter)
+	return fmt.Errorf("unknown error: %#x", param)
 }

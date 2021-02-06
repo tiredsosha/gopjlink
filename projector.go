@@ -1,7 +1,10 @@
 package pjlink
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"strconv"
@@ -36,22 +39,88 @@ func NewProjector(addr string, opts ...Option) *Projector {
 			Delay: options.delay,
 			NewConnection: func(ctx context.Context) (net.Conn, error) {
 				dial := net.Dialer{}
-				return dial.DialContext(ctx, "tcp", addr+":"+strconv.Itoa(options.port))
+
+				conn, err := dial.DialContext(ctx, "tcp", addr+":"+strconv.Itoa(options.port))
+				if err != nil {
+					return nil, err
+				}
+
+				if err := doAuth(ctx, conn, options.password); err != nil {
+					conn.Close()
+					return nil, fmt.Errorf("unable to do auth: %w", err)
+				}
+
+				return conn, nil
 			},
 			Logger: options.log.Sugar(),
 		},
 	}
 }
 
-func (p *Projector) sendCommand(ctx context.Context, cmd command) (command, error) {
-	var resp command
-
-	req, err := cmd.MarshalBinary()
-	if err != nil {
-		return resp, fmt.Errorf("unable to marshal command: %w", err)
+func doAuth(ctx context.Context, conn net.Conn, pass string) error {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(5 * time.Second)
 	}
 
-	err = p.pool.Do(ctx, func(conn connpool.Conn) error {
+	if err := conn.SetDeadline(deadline); err != nil {
+		return fmt.Errorf("unable to set deadline: %w", err)
+	}
+
+	// read the line
+	line := line{}
+	buf := make([]byte, 64)
+	for !bytes.Contains(buf, []byte{'\r'}) {
+		n, err := conn.Read(buf)
+		if err != nil {
+			return fmt.Errorf("unable to read: %w", err)
+		}
+
+		line = append(line, buf[:n]...)
+	}
+
+	if !line.IsAuth() {
+		return nil // just go ahead?
+	}
+
+	param := line.Parameter()
+	switch {
+	case len(param) == 0:
+		return fmt.Errorf("empty parameter on auth line")
+	case param[0] == '0':
+		return nil // no auth required
+	case len(param) != 2+8:
+		return fmt.Errorf("invalid auth length")
+	case param[0] != '1' && param[1] != ' ':
+		return fmt.Errorf("invalid first two auth characters")
+	}
+
+	rand := string(param[2:])
+	sum := md5.Sum([]byte(rand + pass))
+	b := []byte(hex.EncodeToString(sum[:]))
+
+	fmt.Printf("password: %v\n", pass)
+	fmt.Printf("rand: %v\n", rand)
+	fmt.Printf("data: %s\n", []byte(rand+pass))
+	fmt.Printf("sum: %q\n", b)
+	fmt.Printf("writing %#x\n", b)
+
+	// send sum
+	n, err := conn.Write(b)
+	switch {
+	case err != nil:
+		return fmt.Errorf("unable to write password to connection: %w", err)
+	case n != len(b):
+		return fmt.Errorf("unable to write password to connection: wrote %v/%v bytes", n, len(b))
+	}
+
+	return nil
+}
+
+func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
+	var resp line
+
+	err := p.pool.Do(ctx, func(conn connpool.Conn) error {
 		deadline, ok := ctx.Deadline()
 		if !ok {
 			deadline = time.Now().Add(10 * time.Second)
@@ -61,21 +130,26 @@ func (p *Projector) sendCommand(ctx context.Context, cmd command) (command, erro
 			return fmt.Errorf("unable to set connection deadline: %w", err)
 		}
 
-		n, err := conn.Write(req)
+		fmt.Printf("writing %#x\n", cmd)
+
+		n, err := conn.Write(cmd)
 		switch {
 		case err != nil:
 			return fmt.Errorf("unable to write to connection: %w", err)
-		case n != len(req):
-			return fmt.Errorf("unable to write to connection: wrote %v/%v bytes", n, len(req))
+		case n != len(cmd):
+			return fmt.Errorf("unable to write to connection: wrote %v/%v bytes", n, len(cmd))
 		}
 
-		data, err := conn.ReadUntil(_terminator, deadline)
+		data, err := conn.ReadUntil('\r', deadline)
 		if err != nil {
 			return fmt.Errorf("unable to read from connection: %w", err)
 		}
 
-		if err := resp.UnmarshalBinary(data); err != nil {
-			return fmt.Errorf("unable to unmarshal response: %w", err)
+		fmt.Printf("response %#x\n", data)
+
+		resp = line(data)
+		if resp.IsAuth() {
+			return fmt.Errorf("invalid password")
 		}
 
 		return nil

@@ -7,10 +7,11 @@ import (
 )
 
 type options struct {
-	ttl   time.Duration
-	delay time.Duration
-	log   *zap.Logger
-	port  int
+	ttl      time.Duration
+	delay    time.Duration
+	log      *zap.Logger
+	port     int
+	password string
 }
 
 type Option interface {
@@ -32,5 +33,11 @@ func WithLogger(l *zap.Logger) Option {
 func WithPort(port int) Option {
 	return optionFunc(func(o *options) {
 		o.port = port
+	})
+}
+
+func WithPassword(password string) Option {
+	return optionFunc(func(o *options) {
+		o.password = password
 	})
 }

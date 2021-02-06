@@ -1,12 +1,6 @@
 package pjlink
 
-import (
-	"errors"
-	"testing"
-
-	"github.com/matryer/is"
-)
-
+/*
 type commandBinaryMarshalTest struct {
 	name           string
 	command        command
@@ -115,3 +109,4 @@ func TestCommandBinaryMarshal(t *testing.T) {
 		})
 	}
 }
+*/
