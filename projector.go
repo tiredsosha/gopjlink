@@ -99,12 +99,6 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 	sum := md5.Sum([]byte(rand + pass))
 	b := []byte(hex.EncodeToString(sum[:]))
 
-	fmt.Printf("password: %v\n", pass)
-	fmt.Printf("rand: %v\n", rand)
-	fmt.Printf("data: %s\n", []byte(rand+pass))
-	fmt.Printf("sum: %q\n", b)
-	fmt.Printf("writing %#x\n", b)
-
 	// send sum
 	n, err := conn.Write(b)
 	switch {
@@ -130,7 +124,7 @@ func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
 			return fmt.Errorf("unable to set connection deadline: %w", err)
 		}
 
-		fmt.Printf("writing %#x\n", cmd)
+		p.log.Debug("Command line", zap.String("line", fmt.Sprintf("%#x", cmd)))
 
 		n, err := conn.Write(cmd)
 		switch {
@@ -145,7 +139,7 @@ func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
 			return fmt.Errorf("unable to read from connection: %w", err)
 		}
 
-		fmt.Printf("response %#x\n", data)
+		p.log.Debug("Response line", zap.String("line", fmt.Sprintf("%#x", data)))
 
 		resp = line(data)
 		if resp.IsAuth() {
