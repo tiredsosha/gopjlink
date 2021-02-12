@@ -8,6 +8,6 @@ import (
 var proj *Projector
 
 func TestMain(m *testing.M) {
-	proj = NewProjector("10.5.105.30", WithPassword(os.Getenv("PJLINK_PASS")))
+	proj = NewProjector("HBLL-1060-D1.byu.edu", WithPassword(os.Getenv("PJLINK_PASS")))
 	os.Exit(m.Run())
 }

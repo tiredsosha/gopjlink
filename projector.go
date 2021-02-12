@@ -50,6 +50,7 @@ func NewProjector(addr string, opts ...Option) *Projector {
 					return nil, fmt.Errorf("unable to do auth: %w", err)
 				}
 
+				time.Sleep(options.delay)
 				return conn, nil
 			},
 			Logger: options.log.Sugar(),
@@ -67,19 +68,26 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 		return fmt.Errorf("unable to set deadline: %w", err)
 	}
 
-	// read the line
-	line := line{}
-	buf := make([]byte, 64)
-	for !bytes.Contains(buf, []byte{'\r'}) {
-		n, err := conn.Read(buf)
-		if err != nil {
-			return fmt.Errorf("unable to read: %w", err)
+	readLine := func() (line, error) {
+		line := line{}
+		buf := make([]byte, 64)
+		for !bytes.Contains(buf, []byte{'\r'}) {
+			n, err := conn.Read(buf)
+			if err != nil {
+				return nil, fmt.Errorf("unable to read: %w", err)
+			}
+
+			line = append(line, buf[:n]...)
 		}
 
-		line = append(line, buf[:n]...)
+		return line, nil
 	}
 
-	if !line.IsAuth() {
+	line, err := readLine()
+	switch {
+	case err != nil:
+		return err
+	case !line.IsAuth():
 		return nil // just go ahead?
 	}
 
@@ -88,7 +96,8 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 	case len(param) == 0:
 		return fmt.Errorf("empty parameter on auth line")
 	case param[0] == '0':
-		return nil // no auth required
+		// no auth required
+		return nil
 	case len(param) != 2+8:
 		return fmt.Errorf("invalid auth length")
 	case param[0] != '1' && param[1] != ' ':
@@ -99,13 +108,33 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 	sum := md5.Sum([]byte(rand + pass))
 	b := []byte(hex.EncodeToString(sum[:]))
 
-	// send sum
+	// append on a command so that it works?
+	// i feel like i shouldn't need to do this, but it doesn't work without it
+	// what i _think_ should happen is that we write this part, and then
+	// the command is actually written in sendCommand. maybe it just happens too
+	// late so the projector just assumes we failed auth? idk
+	cmd, err := newCommand('1', _bodyPower, []byte{'?'})
+	if err != nil {
+		return fmt.Errorf("unable to build power command: %w", err)
+	}
+
+	b = append(b, cmd...)
+
+	// send sum + command
 	n, err := conn.Write(b)
 	switch {
 	case err != nil:
 		return fmt.Errorf("unable to write password to connection: %w", err)
 	case n != len(b):
 		return fmt.Errorf("unable to write password to connection: wrote %v/%v bytes", n, len(b))
+	}
+
+	line, err = readLine()
+	switch {
+	case err != nil:
+		return err
+	case line.Error() != nil:
+		return line.Error()
 	}
 
 	return nil
