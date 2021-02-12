@@ -8,57 +8,6 @@ import (
 
 type line []byte
 
-func newCommand(class byte, body [4]byte, param []byte) (line, error) {
-	// can parameter be len(0)?
-	if len(param) > 128 {
-		return nil, fmt.Errorf("parameter must be less than 128 bytes")
-	}
-
-	l := make(line, _minCommandBytes+len(param))
-	l[0] = '%'
-	l[1] = class
-
-	l[2] = body[0]
-	l[3] = body[1]
-	l[4] = body[2]
-	l[5] = body[3]
-
-	l[6] = ' '
-
-	copy(l[7:], param)
-	l[len(l)-1] = '\r'
-	return l, nil
-}
-
-func (c line) Header() byte {
-	if len(c) == 0 {
-		return 0x00
-	}
-
-	return c[0]
-}
-
-func (c line) Body() [4]byte {
-	if len(c) < 6 {
-		return [4]byte{}
-	}
-
-	return [4]byte{c[2], c[3], c[4], c[5]}
-}
-
-func (c line) Parameter() []byte {
-	if len(c) < _minCommandBytes || len(c) > _minCommandBytes+_maxParameterBytes {
-		return nil
-	}
-
-	return c[7 : len(c)-1]
-}
-
-func (c line) IsAuth() bool {
-	lower := bytes.ToLower(c)
-	return bytes.HasPrefix(lower, []byte{'p', 'j', 'l', 'i', 'n', 'k'})
-}
-
 const (
 	_minCommandBytes   = 1 + 1 + 4 + 1 + 1
 	_maxParameterBytes = 128
@@ -82,33 +31,56 @@ var (
 	_bodyClass       = [4]byte{'C', 'L', 'S', 'S'}
 )
 
-/*
-func (c *command) UnmarshalBinary(data []byte) error {
-	if len(data) < _minCommandBytes {
-		return errors.New("data is too short")
+func newCommand(class byte, body [4]byte, param []byte) (line, error) {
+	// can parameter be len(0)?
+	if len(param) > 128 {
+		return nil, fmt.Errorf("parameter must be less than 128 bytes")
 	}
 
-	switch {
-	case data[0] != _commandHeader:
-		return fmt.Errorf("invalid header %#x", data[0])
-	case data[len(data)-1] != _terminator:
-		return fmt.Errorf("invalid terminator %#x", data[len(data)-1])
-	case data[6] != _separatorCommand && data[6] != _separatorResponse:
-		return fmt.Errorf("invalid separator %#x", data[6])
-	}
+	l := make(line, _minCommandBytes+len(param))
+	l[0] = '%'
+	l[1] = class
 
-	c.Class = data[1]
-	c.Body = [4]byte{data[2], data[3], data[4], data[5]}
-	c.Response = data[6] == _separatorResponse
+	l[2] = body[0]
+	l[3] = body[1]
+	l[4] = body[2]
+	l[5] = body[3]
 
-	c.Parameter = make([]byte, len(data)-_minCommandBytes)
-	if len(c.Parameter) > 0 {
-		copy(c.Parameter, data[7:len(data)-1])
-	}
+	l[6] = ' '
 
-	return nil
+	copy(l[7:], param)
+	l[len(l)-1] = '\r'
+	return l, nil
 }
-*/
+
+func (l line) Header() byte {
+	if len(l) == 0 {
+		return 0x00
+	}
+
+	return l[0]
+}
+
+func (l line) Body() [4]byte {
+	if len(l) < 6 {
+		return [4]byte{}
+	}
+
+	return [4]byte{l[2], l[3], l[4], l[5]}
+}
+
+func (l line) Parameter() []byte {
+	if len(l) < _minCommandBytes || len(l) > _minCommandBytes+_maxParameterBytes {
+		return nil
+	}
+
+	return l[7 : len(l)-1]
+}
+
+func (l line) IsAuth() bool {
+	lower := bytes.ToLower(l)
+	return bytes.HasPrefix(lower, []byte{'p', 'j', 'l', 'i', 'n', 'k'})
+}
 
 func (l line) Error() error {
 	param := l.Parameter()

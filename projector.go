@@ -140,7 +140,7 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 	return nil
 }
 
-func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
+func (p *Projector) sendCommand(ctx context.Context, cmd line, coolOff time.Duration) (line, error) {
 	var resp line
 
 	err := p.pool.Do(ctx, func(conn connpool.Conn) error {
@@ -153,7 +153,7 @@ func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
 			return fmt.Errorf("unable to set connection deadline: %w", err)
 		}
 
-		p.log.Debug("Command line", zap.String("line", fmt.Sprintf("%#x", cmd)))
+		p.log.Debug("Command line", zap.String("hex", fmt.Sprintf("%#x", cmd)), zap.ByteString("str", cmd))
 
 		n, err := conn.Write(cmd)
 		switch {
@@ -168,13 +168,17 @@ func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
 			return fmt.Errorf("unable to read from connection: %w", err)
 		}
 
-		p.log.Debug("Response line", zap.String("line", fmt.Sprintf("%#x", data)))
+		p.log.Debug("Response line", zap.String("hex", fmt.Sprintf("%#x", data)), zap.ByteString("str", data))
 
 		resp = line(data)
-		if resp.IsAuth() {
+		switch {
+		case resp.Error() != nil:
+			return resp.Error()
+		case resp.IsAuth():
 			return fmt.Errorf("invalid password")
 		}
 
+		time.Sleep(coolOff)
 		return nil
 	})
 

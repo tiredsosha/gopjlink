@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/matryer/is"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -16,10 +15,18 @@ func TestPower(t *testing.T) {
 	proj.log = log
 	proj.pool.Logger = log.Sugar()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	is.NoErr(proj.SetPower(ctx, true))
 
 	pow, err := proj.Power(ctx)
 	is.NoErr(err)
-	log.Info("power", zap.Bool("power", pow))
+	is.True(pow)
+
+	is.NoErr(proj.SetPower(ctx, false))
+
+	pow, err = proj.Power(ctx)
+	is.NoErr(err)
+	is.True(!pow)
 }
