@@ -23,7 +23,7 @@ type Projector struct {
 func NewProjector(addr string, opts ...Option) *Projector {
 	options := &options{
 		ttl:   30 * time.Second,
-		delay: 250 * time.Millisecond,
+		delay: 1 * time.Second,
 		log:   zap.NewNop(),
 		port:  4352,
 	}

@@ -91,6 +91,10 @@ func (l line) Error() error {
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '1'}):
 		return errors.New("undefined command")
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '2'}):
+		if l.Body() == _bodyInput {
+			return errors.New("nonexistent input source")
+		}
+
 		return errors.New("out of parameter")
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '3'}):
 		return errors.New("unavailable time")
