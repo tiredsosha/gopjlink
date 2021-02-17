@@ -7,12 +7,17 @@ import (
 )
 
 func (p *Projector) Blank(ctx context.Context) (bool, error) {
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return false, err
+	}
+	defer p.sem.Release(1)
+
 	cmd, err := newCommand('1', _bodyMute, []byte{'?'})
 	if err != nil {
 		return false, fmt.Errorf("unable to build command: %w", err)
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, 0)
+	resp, err := p.sendCommand(ctx, cmd)
 	if err != nil {
 		return false, fmt.Errorf("unable to send command: %w", err)
 	}
@@ -37,6 +42,11 @@ func (p *Projector) Blank(ctx context.Context) (bool, error) {
 }
 
 func (p *Projector) SetBlank(ctx context.Context, blank bool) error {
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return err
+	}
+	defer p.sem.Release(1)
+
 	var state []byte
 	switch {
 	case p.avOnlyMute && !blank:
@@ -54,7 +64,7 @@ func (p *Projector) SetBlank(ctx context.Context, blank bool) error {
 		return fmt.Errorf("unable to build command: %w", err)
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, 0)
+	resp, err := p.sendCommand(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("unable to send command: %w", err)
 	}

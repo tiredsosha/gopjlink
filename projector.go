@@ -12,6 +12,7 @@ import (
 
 	"github.com/byuoitav/connpool"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 )
 
 type Projector struct {
@@ -19,6 +20,12 @@ type Projector struct {
 	pool       *connpool.Pool
 	log        *zap.Logger
 	avOnlyMute bool
+
+	// sem is a weighted semaphore of weight 1.
+	// this is essentially a mutex, but allows Lock() with context.Context.
+	// Since some commands (power on) require sending multiple commands to the projector,
+	// this ensures that a command has exclusive access to the connection while running
+	sem *semaphore.Weighted
 }
 
 func NewProjector(addr string, opts ...Option) *Projector {
@@ -57,6 +64,7 @@ func NewProjector(addr string, opts ...Option) *Projector {
 			},
 			Logger: options.log.Sugar(),
 		},
+		sem: semaphore.NewWeighted(1),
 	}
 }
 
@@ -142,7 +150,7 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 	return nil
 }
 
-func (p *Projector) sendCommand(ctx context.Context, cmd line, coolOff time.Duration) (line, error) {
+func (p *Projector) sendCommand(ctx context.Context, cmd line) (line, error) {
 	var resp line
 	cmdBody := cmd.Body()
 
@@ -184,7 +192,6 @@ func (p *Projector) sendCommand(ctx context.Context, cmd line, coolOff time.Dura
 			return fmt.Errorf("unexpected response body: %#x", respBody)
 		}
 
-		time.Sleep(coolOff)
 		return nil
 	})
 

@@ -82,6 +82,15 @@ func (l line) IsAuth() bool {
 	return bytes.HasPrefix(lower, []byte{'p', 'j', 'l', 'i', 'n', 'k'})
 }
 
+var (
+	ErrUndefinedCommand = errors.New("undefined command")
+	ErrInvalidInput     = errors.New("nonexistent input source")
+	ErrOutOfParameter   = errors.New("out of parameter")
+	ErrUnavailableTime  = errors.New("unavailable time")
+	ErrProjectorFailure = errors.New("projector/display failure")
+	ErrAuth             = errors.New("invalid password")
+)
+
 func (l line) Error() error {
 	param := l.Parameter()
 
@@ -89,19 +98,19 @@ func (l line) Error() error {
 	case !bytes.HasPrefix(bytes.ToUpper(param), []byte{'E', 'R', 'R'}):
 		return nil
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '1'}):
-		return errors.New("undefined command")
+		return ErrUndefinedCommand
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '2'}):
 		if l.Body() == _bodyInput {
-			return errors.New("nonexistent input source")
+			return ErrInvalidInput
 		}
 
-		return errors.New("out of parameter")
+		return ErrOutOfParameter
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '3'}):
-		return errors.New("unavailable time")
+		return ErrUnavailableTime
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', '4'}):
-		return errors.New("projector/display failure")
+		return ErrProjectorFailure
 	case bytes.EqualFold(param, []byte{'E', 'R', 'R', 'A'}):
-		return errors.New("invalid password")
+		return ErrAuth
 	}
 
 	return fmt.Errorf("unknown error: %#x", param)

@@ -3,54 +3,68 @@ package pjlink
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
 
+const (
+	_powerOn      = "on"
+	_powerOff     = "off"
+	_powerCooling = "cooling"
+	_powerWarmUp  = "warm-up"
+)
+
 func (p *Projector) Power(ctx context.Context) (bool, error) {
-	cmd, err := newCommand('1', _bodyPower, []byte{'?'})
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return false, err
+	}
+	defer p.sem.Release(1)
+
+	state, err := p.power(ctx)
 	if err != nil {
-		return false, fmt.Errorf("unable to build command: %w", err)
+		return false, err
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, 0)
+	return state == _powerOn || state == _powerWarmUp, nil
+}
+
+func (p *Projector) power(ctx context.Context) (string, error) {
+	cmd, err := newCommand('1', _bodyPower, []byte{'?'})
 	if err != nil {
-		return false, fmt.Errorf("unable to send command: %w", err)
+		return "", fmt.Errorf("unable to build command: %w", err)
+	}
+
+	resp, err := p.sendCommand(ctx, cmd)
+	if err != nil {
+		return "", fmt.Errorf("unable to send command: %w", err)
 	}
 
 	param := resp.Parameter()
 	switch {
 	case bytes.EqualFold(param, []byte{'0'}):
-		return false, nil
+		return _powerOff, nil
 	case bytes.EqualFold(param, []byte{'1'}):
-		return true, nil
+		return _powerOn, nil
 	case bytes.EqualFold(param, []byte{'2'}):
-		return false, nil
+		return _powerCooling, nil
 	case bytes.EqualFold(param, []byte{'3'}):
-		return true, nil
+		return _powerWarmUp, nil
 	}
 
-	return false, fmt.Errorf("unknown power state: %#x", param)
+	return "", fmt.Errorf("unknown power state: %#x", param)
 }
 
 // SetPower sets the power state of the projector.
-// TODO should probably wait until it's no longer "powering on" or "cooling" instead of just a fixed duration
 func (p *Projector) SetPower(ctx context.Context, power bool) error {
-	// see if we actually need to do anything
-	curPower, err := p.Power(ctx)
-	switch {
-	case err != nil:
-		// we'll just try to set power anyways
-	case curPower == power:
-		// no need to set power
-		return nil
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return err
 	}
+	defer p.sem.Release(1)
 
 	state := []byte{'0'}
-	delay := 3 * time.Second
 	if power {
 		state = []byte{'1'}
-		delay = (10 * time.Second) - p.pool.Delay
 	}
 
 	cmd, err := newCommand('1', _bodyPower, state)
@@ -58,7 +72,7 @@ func (p *Projector) SetPower(ctx context.Context, power bool) error {
 		return fmt.Errorf("unable to build command: %w", err)
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, delay)
+	resp, err := p.sendCommand(ctx, cmd)
 	if err != nil {
 		return fmt.Errorf("unable to send command: %w", err)
 	}
@@ -67,5 +81,31 @@ func (p *Projector) SetPower(ctx context.Context, power bool) error {
 		return fmt.Errorf("unknown response: %#x", resp.Parameter())
 	}
 
-	return nil
+	// if we powered on, wait 10 seconds (from spec)
+	if power {
+		time.Sleep(10 * time.Second)
+	}
+
+	// wait for projector to change state
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			pow, err := p.power(ctx)
+			switch {
+			case errors.Is(err, ErrUnavailableTime):
+				// keep waiting
+			case err != nil:
+				return fmt.Errorf("unable to confirm power set: %w", err)
+			case (power && pow == _powerWarmUp) || (!power && pow == _powerCooling):
+				// keep waiting
+			case (power && pow == _powerOn) || (!power && pow == _powerOff):
+				return nil
+			}
+		case <-ctx.Done():
+			return fmt.Errorf("unable to confirm power set: %w", ctx.Err())
+		}
+	}
 }

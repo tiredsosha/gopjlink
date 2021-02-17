@@ -59,12 +59,17 @@ var _inputs = map[string][]byte{
 }
 
 func (p *Projector) VideoInputs(ctx context.Context) (map[string]string, error) {
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer p.sem.Release(1)
+
 	cmd, err := newCommand('1', _bodyInput, []byte{'?'})
 	if err != nil {
 		return nil, fmt.Errorf("unable to build command: %w", err)
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, 0)
+	resp, err := p.sendCommand(ctx, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send command: %w", err)
 	}
@@ -75,6 +80,11 @@ func (p *Projector) VideoInputs(ctx context.Context) (map[string]string, error) 
 }
 
 func (p *Projector) SetVideoInput(ctx context.Context, output, input string) error {
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return err
+	}
+	defer p.sem.Release(1)
+
 	cmdInput, ok := _inputs[input]
 	if !ok {
 		return fmt.Errorf("unknown input")
@@ -85,7 +95,7 @@ func (p *Projector) SetVideoInput(ctx context.Context, output, input string) err
 		return fmt.Errorf("unable to build command: %w", err)
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, 0)
+	resp, err := p.sendCommand(ctx, cmd)
 	switch {
 	case err != nil:
 		return fmt.Errorf("unable to send command: %w", err)
@@ -97,12 +107,17 @@ func (p *Projector) SetVideoInput(ctx context.Context, output, input string) err
 }
 
 func (p *Projector) inputList(ctx context.Context) ([]string, error) {
+	if err := p.sem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer p.sem.Release(1)
+
 	cmd, err := newCommand('1', _bodyInputList, []byte{'?'})
 	if err != nil {
 		return nil, fmt.Errorf("unable to build command: %w", err)
 	}
 
-	resp, err := p.sendCommand(ctx, cmd, 0)
+	resp, err := p.sendCommand(ctx, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send command: %w", err)
 	}

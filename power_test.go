@@ -15,7 +15,7 @@ func TestPower(t *testing.T) {
 	proj.log = log
 	proj.pool.Logger = log.Sugar()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 
 	is.NoErr(proj.SetPower(ctx, true))
