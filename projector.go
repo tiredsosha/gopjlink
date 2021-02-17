@@ -15,9 +15,10 @@ import (
 )
 
 type Projector struct {
-	address string
-	pool    *connpool.Pool
-	log     *zap.Logger
+	address    string
+	pool       *connpool.Pool
+	log        *zap.Logger
+	avOnlyMute bool
 }
 
 func NewProjector(addr string, opts ...Option) *Projector {
@@ -33,7 +34,8 @@ func NewProjector(addr string, opts ...Option) *Projector {
 	}
 
 	return &Projector{
-		log: options.log,
+		avOnlyMute: options.avOnlyMute,
+		log:        options.log,
 		pool: &connpool.Pool{
 			TTL:   options.ttl,
 			Delay: options.delay,
@@ -142,6 +144,7 @@ func doAuth(ctx context.Context, conn net.Conn, pass string) error {
 
 func (p *Projector) sendCommand(ctx context.Context, cmd line, coolOff time.Duration) (line, error) {
 	var resp line
+	cmdBody := cmd.Body()
 
 	err := p.pool.Do(ctx, func(conn connpool.Conn) error {
 		deadline, ok := ctx.Deadline()
@@ -171,11 +174,14 @@ func (p *Projector) sendCommand(ctx context.Context, cmd line, coolOff time.Dura
 		p.log.Debug("Response line", zap.String("hex", fmt.Sprintf("%#x", data)), zap.ByteString("str", data))
 
 		resp = line(data)
+		respBody := resp.Body()
 		switch {
 		case resp.Error() != nil:
 			return resp.Error()
 		case resp.IsAuth():
 			return fmt.Errorf("invalid password")
+		case !bytes.EqualFold(respBody[:], cmdBody[:]):
+			return fmt.Errorf("unexpected response body: %#x", respBody)
 		}
 
 		time.Sleep(coolOff)

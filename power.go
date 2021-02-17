@@ -19,11 +19,7 @@ func (p *Projector) Power(ctx context.Context) (bool, error) {
 	}
 
 	param := resp.Parameter()
-	body := resp.Body()
-
 	switch {
-	case !bytes.EqualFold(body[:], _bodyPower[:]):
-		return false, fmt.Errorf("unexpected body in response: %#x", body)
 	case bytes.EqualFold(param, []byte{'0'}):
 		return false, nil
 	case bytes.EqualFold(param, []byte{'1'}):
@@ -67,14 +63,8 @@ func (p *Projector) SetPower(ctx context.Context, power bool) error {
 		return fmt.Errorf("unable to send command: %w", err)
 	}
 
-	param := resp.Parameter()
-	body := resp.Body()
-
-	switch {
-	case !bytes.EqualFold(body[:], _bodyPower[:]):
-		return fmt.Errorf("unexpected body in response: %#x", body)
-	case !bytes.EqualFold(param, []byte{'O', 'K'}):
-		return fmt.Errorf("unknown response: %#x", param)
+	if !bytes.EqualFold(resp.Parameter(), []byte{'O', 'K'}) {
+		return fmt.Errorf("unknown response: %#x", resp.Parameter())
 	}
 
 	return nil

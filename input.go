@@ -65,11 +65,8 @@ func (p *Projector) VideoInputs(ctx context.Context) (map[string]string, error) 
 	}
 
 	resp, err := p.sendCommand(ctx, cmd, 0)
-	switch {
-	case err != nil:
+	if err != nil {
 		return nil, fmt.Errorf("unable to send command: %w", err)
-	case resp.Body() != _bodyInput:
-		return nil, fmt.Errorf("unexpected body in response: %#x", resp.Body())
 	}
 
 	return map[string]string{
@@ -92,8 +89,6 @@ func (p *Projector) SetVideoInput(ctx context.Context, output, input string) err
 	switch {
 	case err != nil:
 		return fmt.Errorf("unable to send command: %w", err)
-	case resp.Body() != _bodyInput:
-		return fmt.Errorf("unexpected body in response: %#x", resp.Body())
 	case !bytes.EqualFold(resp.Parameter(), []byte{'O', 'K'}):
 		return fmt.Errorf("unexpected parameter: %#x", resp.Parameter())
 	}
@@ -108,11 +103,8 @@ func (p *Projector) inputList(ctx context.Context) ([]string, error) {
 	}
 
 	resp, err := p.sendCommand(ctx, cmd, 0)
-	switch {
-	case err != nil:
+	if err != nil {
 		return nil, fmt.Errorf("unable to send command: %w", err)
-	case resp.Body() != _bodyInputList:
-		return nil, fmt.Errorf("unexpected body in response: %#x", resp.Body())
 	}
 
 	split := bytes.Split(resp.Parameter(), []byte{' '})
