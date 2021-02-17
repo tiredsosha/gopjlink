@@ -16,10 +16,11 @@ import (
 )
 
 type Projector struct {
-	address    string
-	pool       *connpool.Pool
-	log        *zap.Logger
-	avOnlyMute bool
+	address      string
+	pool         *connpool.Pool
+	log          *zap.Logger
+	avOnlyMute   bool
+	powerOnDelay time.Duration
 
 	// sem is a weighted semaphore of weight 1.
 	// this is essentially a mutex, but allows Lock() with context.Context.
@@ -30,10 +31,11 @@ type Projector struct {
 
 func NewProjector(addr string, opts ...Option) *Projector {
 	options := &options{
-		ttl:   30 * time.Second,
-		delay: 1 * time.Second,
-		log:   zap.NewNop(),
-		port:  4352,
+		ttl:          30 * time.Second,
+		delay:        1 * time.Second,
+		log:          zap.NewNop(),
+		port:         4352,
+		powerOnDelay: 10 * time.Second, // approx time from spec
 	}
 
 	for _, o := range opts {
@@ -41,8 +43,9 @@ func NewProjector(addr string, opts ...Option) *Projector {
 	}
 
 	return &Projector{
-		avOnlyMute: options.avOnlyMute,
-		log:        options.log,
+		avOnlyMute:   options.avOnlyMute,
+		powerOnDelay: options.powerOnDelay,
+		log:          options.log,
 		pool: &connpool.Pool{
 			TTL:   options.ttl,
 			Delay: options.delay,

@@ -7,12 +7,13 @@ import (
 )
 
 type options struct {
-	ttl        time.Duration
-	delay      time.Duration
-	log        *zap.Logger
-	port       int
-	password   string
-	avOnlyMute bool
+	ttl          time.Duration
+	delay        time.Duration
+	log          *zap.Logger
+	port         int
+	password     string
+	avOnlyMute   bool
+	powerOnDelay time.Duration
 }
 
 type Option interface {
@@ -46,5 +47,11 @@ func WithPassword(password string) Option {
 func WithAVOnlyMute() Option {
 	return optionFunc(func(o *options) {
 		o.avOnlyMute = true
+	})
+}
+
+func WithPowerOnDelay(delay time.Duration) Option {
+	return optionFunc(func(o *options) {
+		o.powerOnDelay = delay
 	})
 }

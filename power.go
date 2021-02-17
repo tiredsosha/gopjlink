@@ -83,7 +83,7 @@ func (p *Projector) SetPower(ctx context.Context, power bool) error {
 
 	// if we powered on, wait 10 seconds (from spec)
 	if power {
-		time.Sleep(10 * time.Second)
+		time.Sleep(p.powerOnDelay)
 	}
 
 	// wait for projector to change state
