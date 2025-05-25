@@ -1,4 +1,4 @@
-module github.com/tiredsosha/pjlink
+module github.com/tiredsosha/gopjlink
 
 go 1.15
 
