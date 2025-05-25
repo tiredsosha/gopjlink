@@ -1,4 +1,4 @@
-module github.com/byuoitav/pjlink
+module github.com/tiredsosha/pjlink
 
 go 1.15
 
