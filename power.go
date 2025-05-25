@@ -81,31 +81,4 @@ func (p *Projector) SetPower(ctx context.Context, power bool) error {
 		return fmt.Errorf("unknown response: %#x", resp.Parameter())
 	}
 
-	// if we powered on, wait 10 seconds (from spec)
-	if power {
-		time.Sleep(p.powerOnDelay)
-	}
-
-	// wait for projector to change state
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			pow, err := p.power(ctx)
-			switch {
-			case errors.Is(err, ErrUnavailableTime):
-				// keep waiting
-			case err != nil:
-				return fmt.Errorf("unable to confirm power set: %w", err)
-			case (power && pow == _powerWarmUp) || (!power && pow == _powerCooling):
-				// keep waiting
-			case (power && pow == _powerOn) || (!power && pow == _powerOff):
-				return nil
-			}
-		case <-ctx.Done():
-			return fmt.Errorf("unable to confirm power set: %w", ctx.Err())
-		}
-	}
 }
