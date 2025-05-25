@@ -1,11 +1,9 @@
-package pjlink
+package gopjlink
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"time"
 )
 
 const (
@@ -80,5 +78,5 @@ func (p *Projector) SetPower(ctx context.Context, power bool) error {
 	if !bytes.EqualFold(resp.Parameter(), []byte{'O', 'K'}) {
 		return fmt.Errorf("unknown response: %#x", resp.Parameter())
 	}
-
+	return err
 }

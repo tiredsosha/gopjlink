@@ -1,4 +1,4 @@
-package pjlink
+package gopjlink
 
 import (
 	"context"
